@@ -1,17 +1,37 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import requests
 import json
-from db_control import crud, mymodels
+from db_control import crud, mymodels_MySQL as mymodels
 
 
 class Customer(BaseModel):
-    customer_id: str
+    customer_id: str = Field(..., min_length=1, description="顧客ID（必須）")
     customer_name: str
     age: int
     gender: str
 
+    @validator('customer_id')
+    def validate_customer_id(cls, v):
+        if not v or v.strip() == "":
+            raise ValueError('顧客IDは必須です')
+        if not v.replace('-', '').replace('_', '').isalnum():
+            raise ValueError('顧客IDは英数字、ハイフン、アンダースコアのみ使用可能です')
+        return v.strip()
+
+def check_customer_exists(customer_id: str) -> bool:
+    """顧客IDが既に存在するかチェック"""
+    result = crud.myselect(mymodels.Customers, customer_id)
+    if result is None or result == "null" or result == "[]":
+        return False
+    
+    # JSONをパースして配列が空でないかチェック
+    try:
+        result_list = json.loads(result)
+        return len(result_list) > 0
+    except:
+        return False
 
 app = FastAPI()
 
@@ -32,14 +52,34 @@ def index():
 
 @app.post("/customers")
 def create_customer(customer: Customer):
-    values = customer.dict()
-    tmp = crud.myinsert(mymodels.Customers, values)
-    result = crud.myselect(mymodels.Customers, values.get("customer_id"))
-
-    if result:
+    # 1. 重複チェック
+    if check_customer_exists(customer.customer_id):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"顧客ID '{customer.customer_id}' は既に存在します"
+        )
+    
+    # 2. 顧客作成
+    try:
+        values = customer.dict()
+        crud.myinsert(mymodels.Customers, values)
+        
+        # 3. 作成確認
+        result = crud.myselect(mymodels.Customers, customer.customer_id)
+        if not result:
+            raise HTTPException(
+                status_code=500, 
+                detail="顧客の作成に失敗しました"
+            )
+        
         result_obj = json.loads(result)
-        return result_obj if result_obj else None
-    return None
+        return result_obj[0] if result_obj else None
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"データベースエラー: {str(e)}"
+        )
 
 
 @app.get("/customers")
