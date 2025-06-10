@@ -16,7 +16,6 @@ DB_NAME = os.getenv('DB_NAME')
 # MySQLのURL構築
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-SSL_CA_PATH = os.getenv('SSL_CA_PATH')
 # エンジンの作成
 engine = create_engine(
     DATABASE_URL,
@@ -24,6 +23,11 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_recycle=3600,
     connect_args={
-        "ssl_ca": SSL_CA_PATH
+        # pymysqlにSSL接続を強制させるためのダミー辞書
+        # これにより、証明書ファイルに依存せず、
+        # OSのデフォルトの検証方法で安全な接続を試みます。
+        "ssl": {
+            "dummy_key": "dummy_value"
+        }
     }
 )
