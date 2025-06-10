@@ -93,12 +93,20 @@ def read_one_customer(customer_id: str = Query(...)):
 
 @app.get("/allcustomers")
 def read_all_customer():
-    result = crud.myselectAll(mymodels.Customers)
-    # 結果がNoneの場合は空配列を返す
-    if not result:
-        return []
-    # JSON文字列をPythonオブジェクトに変換
-    return json.loads(result)
+    try:
+        result = crud.myselectAll(mymodels.Customers)
+        # 結果がNoneの場合は空配列を返す
+        if not result:
+            return []
+        # JSON文字列をPythonオブジェクトに変換
+        return json.loads(result)
+    except Exception as e:
+        # デバッグのため、発生した例外の具体的な情報をJSONで返す
+        return {
+            "error_detail": "An exception occurred during database operation.",
+            "exception_type": str(type(e)),
+            "exception_message": str(e)
+        }
 
 
 @app.put("/customers")
